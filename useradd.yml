@@ -1,0 +1,16 @@
+---
+- hosts: all
+  tasks:
+  - name: create group exam
+    group:
+      name: exam
+      state: present
+  - name: creating user exam
+    user:
+      name: exam
+      group: exam
+      password: "{{ 'exam@123' | password_hash('sha512') }}" # password exam@123
+      createhome: yes        # Defaults to yes
+      home: /home2/exam    # Defaults to /home/<username>
+      shell: /bin/bash
+      state: present
