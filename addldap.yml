@@ -1,0 +1,51 @@
+--
+- hosts: all
+  tasks:
+  - name: none interactive 
+    shell: "DEBIAN_FRONTEND=noninteractive"
+  
+  - name: Package installation
+    apt:
+      name:
+        - libnss-ldap
+        - libpam-ldap
+        - ldap-utils
+        - nscd
+        - nslcd
+        - autofs
+      state: latest
+  
+  - name: Start & Enable autofs  
+    service:
+      name: autofs
+      state: started
+      enabled: true
+
+  - name: Start & Enable nscd          
+    service:
+      name: nscd
+      state: started
+      enabled: true
+  - name: Start & Enable nslcd         
+    service:
+      name: nslcd
+      state: started
+      enabled: true
+
+  - name: copy configuration files
+    copy: src={{ item.src }} dest={{ item.dest }}
+    with_items:
+      - { src: '/root/ansible/conf-files/ldap.conf', dest: '/etc/ldap.conf' }
+      - { src: '/root/ansible/conf-files/nsswitch.conf', dest: '/etc/nsswitch.conf' }
+      - { src: '/root/ansible/conf-files/mkhomedir', dest: '/usr/share/pam-configs/mkhomedir' }
+      - { src: '/root/ansible/conf-files/auto.master', dest: '/etc/auto.master' }
+      - { src: '/root/ansible/conf-files/auto.home', dest: '/etc/auto.home' }
+      - { src: '/root/ansible/conf-files/nfs-common', dest: '/etc/default/nfs-common' }
+      - { src: '/root/ansible/conf-files/common-password', dest: '/etc/pam.d/common-password' }
+
+  - name: reboot host(s)
+    ansible.builtin.reboot:
+      msg: "reboot by Ansible"
+      pre_reboot_delay: 5
+      post_reboot_delay: 10
+      test_command: "whoami"
