@@ -1,0 +1,69 @@
+---
+  - name: GATHER FACTS FOR IOS
+    hosts: ios
+    connection: network_cli
+    gather_facts: yes    # Gather Facts Ensabled
+    vars: 
+      upgrade_ios_version: 17.06.04.SPA
+
+    tasks:
+      - name: VIEW OS VERSION
+        debug:
+          msg: 
+          - "Current version is {{ ansible_net_version }}"
+          - "Upgrade image is 17.06.04.SPA"
+        
+      - debug: 
+          msg: 
+          - "Image is not compliant and will be upgraded"
+
+        when: ansible_net_version != upgrade_ios_version
+  
+    # Create backup folder for today 
+
+  - hosts: localhost
+    tasks:
+    
+
+    - name: Store DTG as fact
+      set_fact:
+        DTG: "{{ ansible_date_time.date }}"
+
+    - name: Create Directory {{hostvars.localhost.DTG}}
+      file:
+        path: /home/cclab/ansible/cisco-files/backups/{{hostvars.localhost.DTG}}
+        state: directory
+    run_once: true
+    
+    ## Backup Running Config 
+
+  - hosts: ios 
+    tasks:
+    - name: Backup Running Config  
+      ios_command:
+        commands: show run  
+      register: config
+
+    - name: Save output to /home/cclab/ansible/cisco-files/backups
+      copy:
+        content: "{{config.stdout[0]}}"
+        dest: "/home/cclab/ansible/cisco-files/backups/{{hostvars.localhost.DTG}}/{{ inventory_hostname }}-{{hostvars.localhost.DTG}}-config.txt"
+  ## SAVE the Running Config 
+
+    - name: Save running config 
+      ios_config:
+        save_when: always 
+
+  ## Enable SCP in CISCO Switches
+    - name: Enable scp service 
+      ios_config:
+        commands: ip scp server enable 
+  ## Copy software to target device 
+
+    - name: Copy Image // This could take up to below 15 minutes
+      net_put: 
+        src: "/home/cclab/ansible/cisco-files/cat9k_iosxe.17.06.04.SPA.bin"
+        dest: "flash:/cat9k_iosxe.17.06.04.SPA.bin"
+      vars: 
+        ansible_command_timeout: 1200
+        ansible_python_interpreter: /usr/bin/python2
