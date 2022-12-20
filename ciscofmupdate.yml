@@ -1,0 +1,124 @@
+---
+  - name: GATHER FACTS FOR IOS
+    hosts: ios
+    connection: network_cli
+    gather_facts: yes    # Gather Facts Ensabled
+    vars: 
+      upgrade_ios_version: "17.06.04"
+
+    tasks:
+      - name: VIEW OS VERSION
+        debug:
+          msg: 
+          - "Current version is {{ ansible_net_version }}"
+          - "Upgrade image is 17.06.04"
+        
+      - debug: 
+          msg: 
+          - "Image is not compliant and will be upgraded"
+
+        when: ansible_net_version != upgrade_ios_version
+  
+    # Create backup folder for today 
+
+  - hosts: localhost
+    tasks:
+    
+
+    - name: Store DTG as fact
+      set_fact:
+        DTG: "{{ ansible_date_time.date }}"
+
+    - name: Create Directory {{hostvars.localhost.DTG}}
+      file:
+        path: /home/hpc-admin/ansible/cisco-files/backups/{{hostvars.localhost.DTG}}
+        state: directory
+    run_once: true
+    
+    ## Backup Running Config 
+
+  - hosts: ios 
+    tasks:
+    - name: Backup Running Config  
+      ios_command:
+        commands: show run  
+      register: config
+
+    - name: Save output to /home/hpc-admin/ansible/cisco-files/backups
+      copy:
+        content: "{{config.stdout[0]}}"
+        dest: "/home/hpc-admin/ansible/cisco-files/backups/{{hostvars.localhost.DTG}}/{{ inventory_hostname }}-{{hostvars.localhost.DTG}}-config.txt"
+  ## SAVE the Running Config 
+
+    - name: Save running config 
+      ios_config:
+        save_when: always 
+
+  ## Enable SCP in CISCO Switches
+    - name: Enable scp service 
+      ios_config:
+        commands: ip scp server enable 
+  ## Copy software to target device 
+
+          #    - name: Copy Image // This could take up to below 15 minutes
+          #       net_put: 
+          #         src: "/home/cclab/ansible/cisco-files/cat9k_iosxe.17.06.04.SPA.bin"
+          #         dest: "flash:/cat9k_iosxe.17.06.04.SPA.bin"
+          #         force = no
+          #       vars: 
+          #         ansible_command_timeout: 1200
+          #ansible_python_interpreter: /usr/bin/python2
+
+  ## Change the Boot Variable to the new image 
+
+    - name: Change Boot Variable to new image 
+      ios_config: 
+        commands: 
+          - "boot system flash:cat9k_iosxe.17.06.04.SPA.bin"
+        save_when: always 
+
+## Reload the device 
+
+    - name: Reload the Device 
+      cli_command: 
+        command: "reload\n"
+        prompt: 
+          - confirm
+        answer: 
+          - 'y'
+         
+## Wait for Reachability to the device 
+
+    - name: Wait for device to come backWait for Reachability to the device  switch online
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 900
+      delegate_to: localhost
+
+    - name: Check installed OS for newly installed version
+      nxos_command:
+        commands: [show version | json]
+      register: output
+    - assert:
+        that:
+         - output['stdout'][0]['kickstart_ver_str'] == '17.06.04'
+
+ ###***************************************************************************************
+        
+        ## Check current image 
+#
+#    - name: check the current version 
+#      debug: 
+#        msg: 
+#          - "Current version is {{ ansible_net_version }}"
+#    
+#    - name: check the current version is upgraded or not.
+#      debug: 
+#        msg: 
+#          - "NEW Firmware version is {{ ansible_net_version }}"
+#
+#          - "Software Upgrade has been completed"
+#      
+#     when: upgrade_ios_version == ansible_net_version
+  
